@@ -84,6 +84,14 @@ func UserMessage(err error) string {
 			message = "Database deadlock detected. Finish competing transactions and retry."
 		case "57014":
 			message = "Database query cancelled. Check cancellation or server statement_timeout settings."
+		case "0A000":
+			if pgErr.Message == "cannot truncate a table referenced in a foreign key constraint" {
+				message = "A foreign key prevents truncating the selected local tables."
+				if pgErr.Detail != "" {
+					message += " " + pgErr.Detail
+				}
+				message += " Create a new dump containing both the referencing and referenced tables, then restore it. The failed restore left local data unchanged."
+			}
 		}
 		if message != "" {
 			return strings.ReplaceAll(err.Error(), pgErr.Error(), message)

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -195,12 +196,25 @@ FROM target_data.items`).Scan(&name, &display, &payload, &raw, &tags, &status, &
 	// A skipped child table must not be silently truncated through CASCADE.
 	if err := target.Restore(ctx, dir, manifest, sequences, map[string]struct{}{"items": {}}, schema, nil, nil); err == nil {
 		t.Fatal("expected foreign key to reject truncation with skipped child")
+	} else {
+		message := UserMessage(err)
+		for _, want := range []string{"truncate local tables:", `Table "children" references "items".`, "new dump", "local data unchanged"} {
+			if !strings.Contains(message, want) {
+				t.Fatalf("missing %q from restore message %q", want, message)
+			}
+		}
 	}
 	if err := targetAdmin.QueryRow(ctx, `SELECT count(*) FROM target_data.children`).Scan(&childCount); err != nil {
 		t.Fatal(err)
 	}
 	if childCount != 1 {
 		t.Fatalf("skipped child table changed: %d", childCount)
+	}
+	if err := targetAdmin.QueryRow(ctx, `SELECT count(*) FROM target_data.items`).Scan(&itemCount); err != nil {
+		t.Fatal(err)
+	}
+	if itemCount != 1 {
+		t.Fatalf("failed restore changed selected parent table: %d", itemCount)
 	}
 
 	atomicConfig := targetConfig

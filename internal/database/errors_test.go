@@ -59,6 +59,35 @@ func TestOperationMessages(t *testing.T) {
 	}
 }
 
+func TestForeignKeyTruncateMessage(t *testing.T) {
+	pgErr := &pgconn.PgError{
+		Code:    "0A000",
+		Message: "cannot truncate a table referenced in a foreign key constraint",
+		Detail:  `Table "children" references "items".`,
+		Hint:    "Truncate table children at the same time, or use TRUNCATE ... CASCADE.",
+	}
+	message := UserMessage(fmt.Errorf("truncate local tables: %w", pgErr))
+	for _, want := range []string{"truncate local tables:", `Table "children" references "items".`, "new dump", "local data unchanged"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("missing %q from %q", want, message)
+		}
+	}
+	if strings.Contains(message, "CASCADE") {
+		t.Fatalf("unsafe PostgreSQL hint appeared in %q", message)
+	}
+
+	pgErr.Detail = ""
+	message = UserMessage(fmt.Errorf("truncate local tables: %w", pgErr))
+	if !strings.Contains(message, "foreign key") || !strings.Contains(message, "new dump") {
+		t.Fatalf("missing fallback guidance: %q", message)
+	}
+
+	pgErr.Message = "different unsupported operation"
+	if message := UserMessage(fmt.Errorf("other operation: %w", pgErr)); !strings.Contains(message, "different unsupported operation") || strings.Contains(message, "new dump") {
+		t.Fatalf("unrelated SQLSTATE 0A000 was rewritten: %q", message)
+	}
+}
+
 func TestConnectionSettings(t *testing.T) {
 	db := config.Database{Host: "localhost", Port: 5432, DBName: "app", User: "reader", ConnectTimeout: "1500ms", LockTimeout: "250ms"}
 	for _, readOnly := range []bool{false, true} {
