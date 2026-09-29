@@ -1,0 +1,57 @@
+name: Release
+
+on:
+    release:
+        types: [published]
+
+jobs:
+    build-and-upload:
+        name: Test, build, and upload
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            -   name: Checkout
+                uses: actions/checkout@v7
+
+            -   name: Set up Go
+                uses: actions/setup-go@v7
+                with:
+                    go-version-file: go.mod
+                    cache: true
+
+            -   name: Install Mage
+                run: go install github.com/magefile/mage@v1.17.2
+
+            -   name: Vet
+                run: mage vet
+
+            -   name: Unit tests
+                run: mage test
+
+            -   name: Integration tests
+                run: mage integration
+
+            -   name: Build standalone binaries
+                env:
+                    VERSION: ${{ github.event.release.tag_name }}
+                    COMMIT: ${{ github.sha }}
+                    BUILD_DATE: ${{ github.event.release.created_at }}
+                run: mage dist
+
+            -   name: Verify binaries
+                run: |
+                    mage verify
+                    dist/pg-pull-linux-x86_64 --version
+
+            -   name: Generate SHA-256 sidecars
+                run: |
+                    for binary in dist/*; do
+                        sha256sum "$binary" | cut -d ' ' -f1 > "$binary.sha256"
+                    done
+
+            -   name: Upload binaries and checksums
+                env:
+                    GH_TOKEN: ${{ github.token }}
+                    RELEASE_TAG: ${{ github.event.release.tag_name }}
+                run: gh release upload "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY"

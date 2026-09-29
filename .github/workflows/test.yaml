@@ -1,0 +1,33 @@
+name: Tests
+
+on:
+    pull_request:
+    push:
+        branches: [main]
+
+jobs:
+    test:
+        name: Vet, unit, and integration
+        runs-on: ubuntu-latest
+
+        steps:
+            -   name: Checkout
+                uses: actions/checkout@v7
+
+            -   name: Set up Go
+                uses: actions/setup-go@v7
+                with:
+                    go-version-file: go.mod
+                    cache: true
+
+            -   name: Install Mage
+                run: go install github.com/magefile/mage@v1.17.2
+
+            -   name: Vet
+                run: mage vet
+
+            -   name: Unit tests
+                run: mage test
+
+            -   name: Integration tests
+                run: mage integration

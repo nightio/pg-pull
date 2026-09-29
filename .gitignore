@@ -1,0 +1,6 @@
+/vendor/
+/dist/
+/.pg-pull/
+/.idea/
+/pg-pull
+*.test
